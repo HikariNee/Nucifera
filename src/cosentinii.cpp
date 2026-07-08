@@ -14,8 +14,8 @@ auto main() -> int
   auto extensions = window::extensions();
   extensions.push_back("VK_EXT_debug_utils");
 
-  constexpr std::array device_extensions{"VK_EXT_shader_object",
-                                         "VK_KHR_swapchain"};
+  constexpr std::array device_extensions{
+      "VK_EXT_shader_object", "VK_KHR_swapchain", "VK_KHR_synchronization2"};
 
   auto state = AppInfo{&window, "Vulkan :3", extensions, device_extensions};
 
@@ -29,6 +29,7 @@ auto main() -> int
         window.close();
     }
 
+    engine.draw_frame();
     std::this_thread::sleep_for(16ms);
   }
 

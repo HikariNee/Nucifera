@@ -39,6 +39,8 @@ struct VulkanSwapchain
   vk::Format format;
 
   static VulkanSwapchain create(const VulkanCore&);
+  vk::Image get_image(uint32_t);
+  vk::ImageView get_image_view(uint32_t);
 };
 
 struct VulkanFrame
@@ -56,6 +58,8 @@ struct Cosentinii
   VulkanCore state;
   VulkanSwapchain swapchain;
   VulkanFrame frame;
+  uint32_t index = 0;
 
   static Cosentinii create(const AppInfo);
+  void draw_frame();
 };

@@ -14,6 +14,17 @@ struct Capabilities
   vk::SurfaceTransformFlagBitsKHR transform;
 };
 
+struct TransitionInfo
+{
+  vk::Image image;
+  vk::ImageLayout old_layout;
+  vk::ImageLayout new_layout;
+  vk::PipelineStageFlags2 src_stage_mask;
+  vk::AccessFlags2 src_access_mask;
+  vk::PipelineStageFlags2 dst_stage_mask;
+  vk::AccessFlags2 dst_access_mask;
+};
+
 auto create_instance(const std::string&, std::span<const char* const>)
     -> vk::Instance;
 

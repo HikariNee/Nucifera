@@ -23,7 +23,8 @@ vulkan_args = [
 sources = [
   'src/cosentinii.cpp',
   'src/vk/primitives.cpp',
-  'src/vk/core.cpp'
+  'src/vk/command_buffer.cpp',
+  'src/vk/core.cpp',
 ]
 
 compiler = meson.get_compiler('cpp')

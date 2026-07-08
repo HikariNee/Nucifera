@@ -4,6 +4,7 @@
 
 #include "core.hpp"
 #include "../expect.hpp"
+#include "command_buffer.hpp"
 #include "constants.hpp"
 #include "primitives.hpp"
 #include <spdlog/spdlog.h>
@@ -55,6 +56,16 @@ auto VulkanSwapchain::create(const VulkanCore& a_state) -> VulkanSwapchain
       format.format};
 }
 
+auto VulkanSwapchain::get_image(uint32_t index) -> vk::Image
+{
+  return this->image[index];
+}
+
+auto VulkanSwapchain::get_image_view(uint32_t index) -> vk::ImageView
+{
+  return this->image_view[index];
+}
+
 auto VulkanFrame::create(const VulkanCore& a_state,
                          const VulkanSwapchain& a_swapchain) -> VulkanFrame
 {
@@ -100,4 +111,53 @@ auto Cosentinii::create(const AppInfo a_info) -> Cosentinii
   auto frame_data = VulkanFrame::create(state, swapchain);
 
   return Cosentinii{state, swapchain, frame_data};
+}
+
+auto Cosentinii::draw_frame() -> void
+{
+  const auto device = this->state.device;
+  const auto index = this->index;
+  const auto swapchain = this->swapchain.swapchain;
+  const auto& buffer = this->frame.buffer;
+  const auto queue = this->state.graphics_queue;
+
+  const auto _ = EXPECT_ABORT_VK_RESULT(device.waitForFences(
+      this->frame.draw_fence[index], vk::True, UINT64_MAX));
+
+  [[maybe_unused]] const auto reset_fences_result =
+      device.resetFences(this->frame.draw_fence[index]);
+
+  auto image_index = EXPECT_ABORT(device.acquireNextImageKHR(
+      swapchain, UINT64_MAX, this->frame.present_semaphore[index], nullptr));
+
+  [[maybe_unused]] const auto reset_result = buffer[index].reset();
+
+  command_buffer::clear_image(*this, buffer[index], image_index);
+
+  vk::PipelineStageFlags wait_destination_stage_mask(
+      vk::PipelineStageFlagBits::eColorAttachmentOutput);
+
+  const vk::SubmitInfo submit_info{
+      .waitSemaphoreCount = 1,
+      .pWaitSemaphores = &this->frame.present_semaphore[index],
+      .pWaitDstStageMask = &wait_destination_stage_mask,
+      .commandBufferCount = 1,
+      .pCommandBuffers = &buffer[index],
+      .signalSemaphoreCount = 1,
+      .pSignalSemaphores = &this->frame.render_semaphore[image_index]};
+
+  [[maybe_unused]] const auto submit_result =
+      queue.submit(submit_info, this->frame.draw_fence[index]);
+
+  const vk::PresentInfoKHR present_info_khr{
+      .waitSemaphoreCount = 1,
+      .pWaitSemaphores = &this->frame.render_semaphore[image_index],
+      .swapchainCount = 1,
+      .pSwapchains = &swapchain,
+      .pImageIndices = &image_index};
+
+  [[maybe_unused]] const auto present_result =
+      queue.presentKHR(present_info_khr);
+
+  this->index = (index + 1) % FRAMES_IN_FLIGHT;
 }

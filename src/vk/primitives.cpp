@@ -127,6 +127,8 @@ auto primitives::create_physical_device(
             .shaderDrawParameters &&
         features.template get<vk::PhysicalDeviceVulkan13Features>()
             .dynamicRendering &&
+        features.template get<vk::PhysicalDeviceVulkan13Features>()
+            .synchronization2 &&
         features
             .template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>()
             .extendedDynamicState &&
@@ -199,7 +201,7 @@ auto primitives::create_device(const vk::PhysicalDevice a_physical_device,
       feature_chain = {
           {},
           {.shaderDrawParameters = true},
-          {.dynamicRendering = true},
+          {.synchronization2 = true, .dynamicRendering = true},
           {.extendedDynamicState = true},
           {.shaderObject = true},
       };

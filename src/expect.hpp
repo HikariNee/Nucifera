@@ -22,6 +22,17 @@
     *std::forward<decltype(ref)>(ref);                                         \
   })
 
+#define EXPECT_ABORT_VK_RESULT(expr)                                           \
+  ({                                                                           \
+    auto&& ref = (expr);                                                       \
+    if (ref != vk::Result::eSuccess)                                           \
+    {                                                                          \
+      spdlog::error("Call failed: {}", #expr);                                 \
+      std::abort();                                                            \
+    }                                                                          \
+    ref;                                                                       \
+  })
+
 #define EXPECT_OPTIONAL(expr)                                                  \
   ({                                                                           \
     auto&& ref = (expr);                                                       \
