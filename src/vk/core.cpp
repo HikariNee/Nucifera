@@ -7,6 +7,7 @@
 #include "command_buffer.hpp"
 #include "constants.hpp"
 #include "primitives.hpp"
+#include "shader.hpp"
 #include <spdlog/spdlog.h>
 #include <vulkan/vulkan.hpp>
 
@@ -113,42 +114,64 @@ auto Cosentinii::create(const AppInfo a_info) -> Cosentinii
   return Cosentinii{state, swapchain, frame_data};
 }
 
-auto Cosentinii::draw_frame() -> void
+auto Cosentinii::draw_frame(shader::ShaderSet a_shaders) -> void
 {
+  // Aliases for.. stuff
   const auto device = this->state.device;
   const auto index = this->index;
   const auto swapchain = this->swapchain.swapchain;
-  const auto& buffer = this->frame.buffer;
+  const auto buffer = this->frame.buffer[index];
   const auto queue = this->state.graphics_queue;
+  const auto fence = this->frame.draw_fence[index];
+  const auto present_semaphore = this->frame.present_semaphore[index];
 
-  const auto _ = EXPECT_ABORT_VK_RESULT(device.waitForFences(
-      this->frame.draw_fence[index], vk::True, UINT64_MAX));
+  // Fail is fence cannot be checked.
+  const auto _ =
+      EXPECT_ABORT_VK_RESULT(device.waitForFences(fence, vk::True, UINT64_MAX));
 
-  [[maybe_unused]] const auto reset_fences_result =
-      device.resetFences(this->frame.draw_fence[index]);
+  // Get an Image
+  auto [result, image_index] = device.acquireNextImageKHR(
+      swapchain, UINT64_MAX, present_semaphore, nullptr);
 
-  auto image_index = EXPECT_ABORT(device.acquireNextImageKHR(
-      swapchain, UINT64_MAX, this->frame.present_semaphore[index], nullptr));
+  // Swapchain got invalidated. Recreate it and skip the frame.
+  if (result == vk::Result::eErrorOutOfDateKHR)
+  {
+    recreate_swapchain();
+    return;
+  }
 
-  [[maybe_unused]] const auto reset_result = buffer[index].reset();
+  if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR)
+  {
+    assert(result == vk::Result::eTimeout || result == vk::Result::eNotReady);
+    SPDLOG_ERROR("failed to acquire swap chain image!");
+    std::abort();
+  }
 
-  command_buffer::clear_image(*this, buffer[index], image_index);
+  [[maybe_unused]] const auto reset_fences_result = device.resetFences(fence);
+
+  // I hate these [[maybe_unused]] but what can I do smh.
+  [[maybe_unused]] const auto reset_result = buffer.reset();
+
+  // Clear the image
+  command_buffer::clear_image(*this, buffer, image_index, std::move(a_shaders));
 
   vk::PipelineStageFlags wait_destination_stage_mask(
       vk::PipelineStageFlagBits::eColorAttachmentOutput);
 
+  // Prepare for submit
   const vk::SubmitInfo submit_info{
       .waitSemaphoreCount = 1,
-      .pWaitSemaphores = &this->frame.present_semaphore[index],
+      .pWaitSemaphores = &present_semaphore,
       .pWaitDstStageMask = &wait_destination_stage_mask,
       .commandBufferCount = 1,
-      .pCommandBuffers = &buffer[index],
+      .pCommandBuffers = &buffer,
       .signalSemaphoreCount = 1,
       .pSignalSemaphores = &this->frame.render_semaphore[image_index]};
 
-  [[maybe_unused]] const auto submit_result =
-      queue.submit(submit_info, this->frame.draw_fence[index]);
+  // Submit
+  [[maybe_unused]] const auto submit_result = queue.submit(submit_info, fence);
 
+  // Prepare to show
   const vk::PresentInfoKHR present_info_khr{
       .waitSemaphoreCount = 1,
       .pWaitSemaphores = &this->frame.render_semaphore[image_index],
@@ -156,8 +179,74 @@ auto Cosentinii::draw_frame() -> void
       .pSwapchains = &swapchain,
       .pImageIndices = &image_index};
 
+  // show
   [[maybe_unused]] const auto present_result =
       queue.presentKHR(present_info_khr);
 
+  // Just recreate the swapchain and move on, we already have an image.
+  if ((present_result == vk::Result::eSuboptimalKHR) ||
+      (present_result == vk::Result::eErrorOutOfDateKHR))
+  {
+    recreate_swapchain();
+  }
+
+  // increment index to the next frame
   this->index = (index + 1) % FRAMES_IN_FLIGHT;
+}
+
+auto Cosentinii::create_shaders(
+    std::initializer_list<shader::ShaderInfo> a_info) -> shader::ShaderSet
+{
+  return shader::create_shaders(this->state.device, a_info);
+}
+
+auto Cosentinii::recreate_swapchain() -> bool
+{
+  auto physical_device = this->state.physical_device;
+  auto surface = this->state.surface;
+  auto device = this->state.device;
+  auto& swapchain = this->swapchain;
+
+  auto new_size = this->state.window->size();
+
+  const auto _ = device.waitIdle();
+
+  // Window was minimized, we can't do shit.
+  if (new_size == std::make_pair(0, 0))
+  {
+    return false;
+  }
+
+  // Cleanup the swapchain. We do not need to clear the images (only the views)
+  // because they are cleared by Vulkan itself.
+  swapchain.image_view.clear();
+
+  // Make the new swapchain, we pass the old swapchain along as well to make the
+  // transition seamless.
+  auto capabilities = *primitives::get_capabilities(physical_device, surface,
+                                                    this->state.window->size());
+
+  auto format = *primitives::get_surface_format(physical_device, surface);
+
+  auto new_swapchain = primitives::create_swapchain(
+      capabilities, format, device, surface, swapchain.swapchain);
+
+  auto images = *primitives::create_swapchain_images(device, new_swapchain);
+
+  auto image_views =
+      *primitives::create_swapchain_views(device, images, format.format);
+
+  if (swapchain.swapchain)
+  {
+    device.destroySwapchainKHR(swapchain.swapchain);
+  }
+
+  swapchain.swapchain = new_swapchain;
+  swapchain.image = images;
+  swapchain.image_view = image_views;
+  swapchain.extent =
+      vk::Extent2D{capabilities.extent.width, capabilities.extent.height};
+  swapchain.format = format.format;
+
+  return true;
 }

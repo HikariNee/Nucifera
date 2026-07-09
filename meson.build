@@ -9,9 +9,9 @@ project(
 )
 
 dependencies = [
-  dependency('sfml-window'),
+  dependency('sdl3'),
   dependency('vulkan'),
-  dependency('spdlog')
+  dependency('spdlog'),
 ]
 
 vulkan_args = [
@@ -22,6 +22,7 @@ vulkan_args = [
 
 sources = [
   'src/cosentinii.cpp',
+  'src/vk/shader.cpp',
   'src/vk/primitives.cpp',
   'src/vk/command_buffer.cpp',
   'src/vk/core.cpp',

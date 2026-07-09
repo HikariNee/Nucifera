@@ -1,6 +1,7 @@
 #pragma once
 
-#include <SFML/Window.hpp>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
 #include <spdlog/spdlog.h>
 #include <utility>
 #include <vulkan/vulkan.hpp>
@@ -9,23 +10,36 @@ namespace window
 {
 struct Window
 {
-  sf::Window m_window{};
+  SDL_Window* m_window{};
   bool m_minimized = false;
   bool m_running = false;
 
+  static void init()
+  {
+    if (!SDL_Init(SDL_INIT_VIDEO))
+    {
+      SPDLOG_ERROR("SDL could not be initialized! %s", SDL_GetError());
+      std::abort();
+    }
+  };
+
   bool is_minimized() { return m_minimized; };
   bool is_running() { return m_running; };
-  bool is_open() { return m_window.isOpen(); };
-  auto poll_event() { return m_window.pollEvent(); };
-  auto close() { return m_window.close(); };
+  auto poll_event(SDL_Event* event) { return SDL_PollEvent(event); };
+  auto close()
+  {
+    m_running = false;
+    SDL_DestroyWindow(m_window);
+  };
 
   auto surface(const vk::Instance a_instance) -> vk::SurfaceKHR
   {
     VkSurfaceKHR surface;
 
-    if (!this->m_window.createVulkanSurface(a_instance, surface))
+    if (!SDL_Vulkan_CreateSurface(this->m_window, a_instance, nullptr,
+                                  &surface))
     {
-      SPDLOG_ERROR("Could not create a surface.");
+      SPDLOG_ERROR("Could not create a surface: {}", SDL_GetError());
       std::abort();
     }
 
@@ -34,7 +48,15 @@ struct Window
 
   std::pair<unsigned, unsigned> size()
   {
-    auto [width, height] = m_window.getSize();
+    int width;
+    int height;
+
+    if (!SDL_GetWindowSizeInPixels(m_window, &width, &height))
+    {
+      SPDLOG_ERROR("Could not get the size of the window! %s", SDL_GetError());
+      std::abort();
+    }
+
     return std::make_pair(width, height);
   };
 };
@@ -42,19 +64,32 @@ struct Window
 inline auto create_window(const std::string& a_name, unsigned a_width,
                           unsigned a_height) -> Window
 {
-  if (!sf::Vulkan::isAvailable(true))
+  Window::init();
+  SDL_Window* window =
+      SDL_CreateWindow(a_name.c_str(), a_width, a_height,
+                       SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+
+  if (!window)
   {
-    SPDLOG_ERROR("Vulkan is not supported on this system.");
-    std::abort();
+    SPDLOG_ERROR("Could not create a window! %s", SDL_GetError());
   }
 
-  sf::Window window{sf::VideoMode({a_width, a_height}), a_name};
-
-  return Window{std::move(window), false, true};
+  return Window{window, false, true};
 }
 
 inline auto extensions() -> std::vector<const char*>
 {
-  return sf::Vulkan::getGraphicsRequiredInstanceExtensions();
+  uint32_t count;
+
+  char const* const* extensions = SDL_Vulkan_GetInstanceExtensions(&count);
+
+  if (!extensions)
+  {
+    SPDLOG_ERROR("Could not get instance extensions! %s", SDL_GetError());
+  }
+
+  std::vector<const char*> extensions_vec(extensions, extensions + count);
+
+  return extensions_vec;
 }
 } // namespace window

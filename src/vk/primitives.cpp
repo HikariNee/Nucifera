@@ -1,14 +1,18 @@
 #include "primitives.hpp"
 #include "../expect.hpp"
+#include <fstream>
 #include <ranges>
 #include <span>
 #include <spdlog/spdlog.h>
-#include <vulkan/vulkan_funcs.hpp>
+#include <vulkan/vulkan.hpp>
+VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 auto primitives::create_instance(const std::string& a_name,
                                  std::span<const char* const> a_extensions)
     -> vk::Instance
 {
+  VULKAN_HPP_DEFAULT_DISPATCHER.init();
+
   const vk::ApplicationInfo app_info{
       .pApplicationName = a_name.c_str(),
       .applicationVersion = VK_MAKE_VERSION(0, 0, 1),
@@ -45,7 +49,10 @@ auto primitives::create_instance(const std::string& a_name,
       .ppEnabledExtensionNames = a_extensions.data(),
   };
 
-  return EXPECT_ABORT(vk::createInstance(create_info));
+  const auto instance = EXPECT_ABORT(vk::createInstance(create_info));
+
+  VULKAN_HPP_DEFAULT_DISPATCHER.init(instance);
+  return instance;
 }
 
 auto primitives::create_physical_device(
@@ -214,7 +221,12 @@ auto primitives::create_device(const vk::PhysicalDevice a_physical_device,
       .ppEnabledExtensionNames = a_extensions.data(),
   };
 
-  return EXPECT_ABORT(a_physical_device.createDevice(device_create_info));
+  const auto device =
+      EXPECT_ABORT(a_physical_device.createDevice(device_create_info));
+
+  VULKAN_HPP_DEFAULT_DISPATCHER.init(device);
+
+  return device;
 }
 
 auto primitives::create_queue(const vk::Device a_device, uint32_t a_index)
@@ -306,11 +318,10 @@ auto primitives::get_surface_format(const vk::PhysicalDevice a_physical_device,
   return formatIt != formats.end() ? *formatIt : formats[0];
 }
 
-auto primitives::create_swapchain(const Capabilities& a_capabilities,
-                                  const vk::SurfaceFormatKHR a_format,
-                                  const vk::Device a_device,
-                                  const vk::SurfaceKHR a_surface)
-    -> vk::SwapchainKHR
+auto primitives::create_swapchain(
+    const Capabilities& a_capabilities, const vk::SurfaceFormatKHR a_format,
+    const vk::Device a_device, const vk::SurfaceKHR a_surface,
+    const std::optional<vk::SwapchainKHR> a_old_swapchain) -> vk::SwapchainKHR
 {
   vk::SwapchainCreateInfoKHR swap_chain_create_info{
       .surface = a_surface,
@@ -325,6 +336,9 @@ auto primitives::create_swapchain(const Capabilities& a_capabilities,
       .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
       .presentMode = vk::PresentModeKHR::eFifo,
       .clipped = true};
+
+  if (a_old_swapchain.has_value())
+    swap_chain_create_info.oldSwapchain = *a_old_swapchain;
 
   auto swapchain =
       EXPECT_ABORT(a_device.createSwapchainKHR(swap_chain_create_info));
@@ -362,4 +376,17 @@ auto primitives::create_swapchain_views(const vk::Device a_device,
   }
 
   return swapchain_image_views;
+}
+
+auto primitives::read_shader(const std::string& a_file_name)
+    -> std::vector<char>
+{
+  std::ifstream file(a_file_name, std::ios::ate | std::ios::binary);
+
+  std::vector<char> buffer(file.tellg());
+  file.seekg(0, std::ios::beg);
+  file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+  file.close();
+
+  return buffer;
 }

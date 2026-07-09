@@ -5,6 +5,8 @@
 #include <string>
 #include <vulkan/vulkan.hpp>
 
+struct VulkanSwapchain;
+
 namespace primitives
 {
 struct Capabilities
@@ -55,7 +57,8 @@ auto get_surface_format(const vk::PhysicalDevice a_physical_device,
 
 auto create_swapchain(const Capabilities& a_capabilities,
                       const vk::SurfaceFormatKHR a_format,
-                      const vk::Device a_device, const vk::SurfaceKHR a_surface)
+                      const vk::Device a_device, const vk::SurfaceKHR a_surface,
+                      const std::optional<vk::SwapchainKHR> = std::nullopt)
     -> vk::SwapchainKHR;
 
 auto create_swapchain_images(const vk::Device, const vk::SwapchainKHR)
@@ -63,4 +66,6 @@ auto create_swapchain_images(const vk::Device, const vk::SwapchainKHR)
 auto create_swapchain_views(const vk::Device, const std::vector<vk::Image>&,
                             const vk::Format)
     -> std::optional<std::vector<vk::ImageView>>;
+
+auto read_shader(const std::string& a_file_name) -> std::vector<char>;
 } // namespace primitives

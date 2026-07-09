@@ -1,4 +1,5 @@
 #pragma once
+#include "shader.hpp"
 #include <vulkan/vulkan.hpp>
 
 struct Cosentinii;
@@ -24,5 +25,5 @@ auto transition_image_layout_present(const vk::CommandBuffer, const vk::Image,
                                      const vk::ImageLayout) -> void;
 
 auto clear_image(Cosentinii& a_state, const vk::CommandBuffer a_buffer,
-                 const uint32_t index) -> void;
+                 const uint32_t index, shader::ShaderSet) -> void;
 } // namespace command_buffer

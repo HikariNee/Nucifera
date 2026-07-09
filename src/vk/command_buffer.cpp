@@ -1,8 +1,39 @@
 #include "command_buffer.hpp"
 #include "core.hpp"
+#include "shader.hpp"
 #include <vulkan/vulkan.hpp>
 
 using namespace command_buffer;
+
+auto default_shader_state(const vk::CommandBuffer a_buffer) -> void
+{
+  a_buffer.setPrimitiveTopologyEXT(vk::PrimitiveTopology::eTriangleList);
+  a_buffer.setPrimitiveRestartEnable(VK_FALSE);
+  a_buffer.setRasterizerDiscardEnable(VK_FALSE);
+  a_buffer.setPolygonModeEXT(vk::PolygonMode::eFill);
+  a_buffer.setRasterizationSamplesEXT(vk::SampleCountFlagBits::e1);
+  a_buffer.setCullMode(vk::CullModeFlagBits::eNone);
+  a_buffer.setFrontFace(vk::FrontFace::eCounterClockwise);
+
+  a_buffer.setDepthTestEnable(VK_FALSE);
+  a_buffer.setDepthWriteEnable(VK_FALSE);
+  a_buffer.setDepthCompareOp(vk::CompareOp::eLess);
+  a_buffer.setDepthBiasEnable(VK_FALSE);
+  a_buffer.setDepthBoundsTestEnable(VK_FALSE);
+  a_buffer.setStencilTestEnable(VK_FALSE);
+  vk::Bool32 blendEnable = VK_FALSE;
+  vk::ColorComponentFlags writeMask =
+      vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+      vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+
+  a_buffer.setColorBlendEnableEXT(0, {blendEnable});
+  a_buffer.setColorWriteMaskEXT(0, {writeMask});
+
+  vk::SampleMask sampleMask = 0xFFFFFFFF;
+  a_buffer.setSampleMaskEXT(vk::SampleCountFlagBits::e1, sampleMask);
+  a_buffer.setAlphaToCoverageEnableEXT(VK_FALSE);
+  a_buffer.setVertexInputEXT({}, {});
+}
 
 auto command_buffer::transition_image_layout(const vk::CommandBuffer a_buffer,
                                              const TransitionInfo& a_info)
@@ -66,7 +97,8 @@ auto command_buffer::transition_image_layout_present(
 
 auto command_buffer::clear_image(Cosentinii& a_state,
                                  const vk::CommandBuffer a_buffer,
-                                 const uint32_t index) -> void
+                                 const uint32_t index,
+                                 const shader::ShaderSet a_shaders) -> void
 {
   vk::ClearValue clear_colour = {
       .color = vk::ClearColorValue{{{0.5f, 0.5f, 0.5f, 1.0f}}}};
@@ -76,7 +108,6 @@ auto command_buffer::clear_image(Cosentinii& a_state,
 
   vk::CommandBufferBeginInfo begin_info{};
   const auto _ = a_buffer.begin(begin_info);
-
   transition_image_layout_optimal(a_buffer, image, vk::ImageLayout::eUndefined);
 
   const vk::RenderingAttachmentInfo rendering_attachment_info = {
@@ -93,8 +124,23 @@ auto command_buffer::clear_image(Cosentinii& a_state,
       .colorAttachmentCount = 1,
       .pColorAttachments = &rendering_attachment_info};
 
+  // START RENDERING
   a_buffer.beginRendering(rendering_info);
+
+  default_shader_state(a_buffer);
+  a_buffer.bindShadersEXT(a_shaders.stages, a_shaders.shader_objects);
+
+  a_buffer.setViewportWithCount(vk::Viewport(
+      0.0f, 0.0f, static_cast<float>(a_state.swapchain.extent.width),
+      static_cast<float>(a_state.swapchain.extent.height), 0.0f, 1.0f));
+
+  a_buffer.setScissorWithCount(
+      vk::Rect2D(vk::Offset2D(0, 0), a_state.swapchain.extent));
+
+  a_buffer.draw(3, 1, 0, 0);
+
   a_buffer.endRendering();
+  // END RENDERING
 
   transition_image_layout_present(a_buffer, image,
                                   vk::ImageLayout::eColorAttachmentOptimal);

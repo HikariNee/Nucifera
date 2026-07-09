@@ -1,5 +1,4 @@
 #pragma once
-#pragma once
 
 #include "command_buffer.hpp"
 #include "core.hpp"

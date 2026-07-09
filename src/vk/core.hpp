@@ -1,4 +1,5 @@
 #pragma once
+#include "shader.hpp"
 #include <vulkan/vulkan.hpp>
 
 constexpr uint64_t FRAMES_IN_FLIGHT = 3;
@@ -61,5 +62,7 @@ struct Cosentinii
   uint32_t index = 0;
 
   static Cosentinii create(const AppInfo);
-  void draw_frame();
+  shader::ShaderSet create_shaders(std::initializer_list<shader::ShaderInfo>);
+  bool recreate_swapchain();
+  void draw_frame(shader::ShaderSet);
 };
