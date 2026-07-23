@@ -1,8 +1,40 @@
 #pragma once
+#include <glm/glm.hpp>
 #include <vulkan/vulkan.hpp>
 
 namespace shader
 {
+struct Vertex
+{
+  glm::vec2 position;
+  glm::vec3 color;
+
+  static vk::VertexInputBindingDescription2EXT binding_description()
+  {
+    return {.binding = 0,
+            .stride = sizeof(Vertex),
+            .inputRate = vk::VertexInputRate::eVertex,
+            .divisor = 1};
+  }
+
+  static std::array<vk::VertexInputAttributeDescription2EXT, 2>
+  attribute_description()
+  {
+    return {{{.location = 0,
+              .binding = 0,
+              .format = vk::Format::eR32G32Sfloat,
+              .offset = offsetof(Vertex, position)},
+             {.location = 1,
+              .binding = 0,
+              .format = vk::Format::eR32G32B32Sfloat,
+              .offset = offsetof(Vertex, color)}}};
+  }
+};
+
+const std::vector<Vertex> vertices = {{{0.4f, -0.5f}, {0.3f, 0.0f, 0.0f}},
+                                      {{0.5f, 0.5f}, {0.0f, 0.5f, 0.0f}},
+                                      {{-0.5f, 0.5f}, {0.0f, 0.0f, 0.5f}}};
+
 struct ShaderSet
 {
   std::vector<vk::ShaderEXT> shader_objects;

@@ -12,6 +12,7 @@ dependencies = [
   dependency('sdl3'),
   dependency('vulkan'),
   dependency('spdlog'),
+  dependency('glm'),
 ]
 
 vulkan_args = [

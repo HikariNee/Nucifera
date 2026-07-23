@@ -15,6 +15,10 @@ auto default_shader_state(const vk::CommandBuffer a_buffer) -> void
   a_buffer.setCullMode(vk::CullModeFlagBits::eNone);
   a_buffer.setFrontFace(vk::FrontFace::eCounterClockwise);
 
+  // Vertex buffer stuff.
+  a_buffer.setVertexInputEXT({shader::Vertex::binding_description()},
+                             shader::Vertex::attribute_description());
+
   a_buffer.setDepthTestEnable(VK_FALSE);
   a_buffer.setDepthWriteEnable(VK_FALSE);
   a_buffer.setDepthCompareOp(vk::CompareOp::eLess);
@@ -32,7 +36,6 @@ auto default_shader_state(const vk::CommandBuffer a_buffer) -> void
   vk::SampleMask sampleMask = 0xFFFFFFFF;
   a_buffer.setSampleMaskEXT(vk::SampleCountFlagBits::e1, sampleMask);
   a_buffer.setAlphaToCoverageEnableEXT(VK_FALSE);
-  a_buffer.setVertexInputEXT({}, {});
 }
 
 auto command_buffer::transition_image_layout(const vk::CommandBuffer a_buffer,
@@ -137,7 +140,8 @@ auto command_buffer::clear_image(Cosentinii& a_state,
   a_buffer.setScissorWithCount(
       vk::Rect2D(vk::Offset2D(0, 0), a_state.swapchain.extent));
 
-  a_buffer.draw(3, 1, 0, 0);
+  a_buffer.bindVertexBuffers(0, a_state.buffer.buffer, {0});
+  a_buffer.draw(static_cast<uint32_t>(shader::vertices.size()), 1, 0, 0);
 
   a_buffer.endRendering();
   // END RENDERING

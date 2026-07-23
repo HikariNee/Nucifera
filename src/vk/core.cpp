@@ -250,3 +250,55 @@ auto Cosentinii::recreate_swapchain() -> bool
 
   return true;
 }
+
+auto find_memory_type(const vk::PhysicalDevice a_physical_device,
+                      uint32_t a_type_filter,
+                      vk::MemoryPropertyFlags a_properties)
+    -> std::optional<uint32_t>
+{
+  auto mem_props = a_physical_device.getMemoryProperties();
+
+  for (const auto x : std::views::iota(0u, mem_props.memoryTypeCount))
+  {
+    if ((a_type_filter & (1 << x)) &&
+        (mem_props.memoryTypes[x].propertyFlags & a_properties) == a_properties)
+    {
+      return x;
+    }
+  }
+
+  return std::nullopt;
+}
+
+auto Cosentinii::create_vertex_buffer(
+    const std::vector<shader::Vertex>& a_vertices) -> void
+{
+  auto device = this->state.device;
+
+  vk::BufferCreateInfo buffer_info{
+      .size = sizeof(a_vertices[0]) * a_vertices.size(),
+      .usage = vk::BufferUsageFlagBits::eVertexBuffer,
+      .sharingMode = vk::SharingMode::eExclusive};
+
+  auto buffer = EXPECT_ABORT(device.createBuffer(buffer_info));
+
+  auto mem_requirements = device.getBufferMemoryRequirements(buffer);
+
+  vk::MemoryAllocateInfo memory_info{
+      .allocationSize = mem_requirements.size,
+      .memoryTypeIndex = EXPECT_ABORT(find_memory_type(
+          this->state.physical_device, mem_requirements.memoryTypeBits,
+          vk::MemoryPropertyFlagBits::eHostVisible |
+              vk::MemoryPropertyFlagBits::eHostCoherent))};
+
+  auto memory = EXPECT_ABORT(device.allocateMemory(memory_info));
+
+  auto mem = device.bindBufferMemory(buffer, memory, 0);
+  void* data;
+  auto _ = device.mapMemory(memory, 0, buffer_info.size, {}, &data);
+  std::memcpy(data, a_vertices.data(), buffer_info.size);
+  device.unmapMemory(memory);
+
+  this->buffer.buffer = std::move(buffer);
+  this->buffer.memory = std::move(memory);
+}

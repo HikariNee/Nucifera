@@ -32,14 +32,16 @@ extern "C" auto SDL_AppInit(void** a_app_state, int, char**) -> SDL_AppResult
       AppInfo{&app_state.window, "Vulkan :3", extensions, device_extensions};
   auto engine = Cosentinii::create(std::move(state));
 
+  engine.create_vertex_buffer(shader::vertices);
+
   auto triangle_shader_src = primitives::read_shader("shaders/slang.spv");
 
   auto triangle_vertex_shader = shader::ShaderInfo::make(
-      triangle_shader_src, "vertMain", vk::ShaderStageFlagBits::eVertex,
+      triangle_shader_src, "vert_main", vk::ShaderStageFlagBits::eVertex,
       vk::ShaderStageFlagBits::eFragment);
 
   auto triangle_fragment_shader = shader::ShaderInfo::make(
-      triangle_shader_src, "fragMain", vk::ShaderStageFlagBits::eFragment, {});
+      triangle_shader_src, "frag_main", vk::ShaderStageFlagBits::eFragment, {});
 
   shader::ShaderSet triangle_shader =
       engine.create_shaders({triangle_vertex_shader, triangle_fragment_shader});

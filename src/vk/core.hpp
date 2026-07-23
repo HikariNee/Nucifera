@@ -54,15 +54,23 @@ struct VulkanFrame
   static VulkanFrame create(const VulkanCore&, const VulkanSwapchain&);
 };
 
+struct Buffer
+{
+  vk::Buffer buffer;
+  vk::DeviceMemory memory;
+};
+
 struct Cosentinii
 {
   VulkanCore state;
   VulkanSwapchain swapchain;
   VulkanFrame frame;
+  Buffer buffer{};
   uint32_t index = 0;
 
   static Cosentinii create(const AppInfo);
   shader::ShaderSet create_shaders(std::initializer_list<shader::ShaderInfo>);
   bool recreate_swapchain();
   void draw_frame(shader::ShaderSet);
+  void create_vertex_buffer(const std::vector<shader::Vertex>&);
 };
