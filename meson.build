@@ -5,7 +5,7 @@ project(
   meson_version : '>= 1.3.0',
   default_options : ['warning_level=2',
                      'cpp_std=c++23',
-                     'cpp_eh=none'],
+                     'cpp_eh=none']
 )
 
 dependencies = [
@@ -15,10 +15,11 @@ dependencies = [
   dependency('glm'),
 ]
 
-vulkan_args = [
+args = [
   '-DVULKAN_HPP_NO_EXCEPTIONS',
   '-DVULKAN_HPP_NO_CONSTRUCTORS',
-  '-DSPDLOG_NO_EXCEPTIONS'
+  '-DSPDLOG_NO_EXCEPTIONS',
+  '-Wno-c++26-extensions',
 ]
 
 sources = [
@@ -42,7 +43,7 @@ exe = executable(
   sources,
   install : true,
   dependencies : dependencies,
-  cpp_args : vulkan_args,
+  cpp_args : args,
   cpp_pch : 'src/pch.hpp'
 
 )

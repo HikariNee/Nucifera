@@ -24,9 +24,12 @@ struct VulkanCore
   vk::PhysicalDevice physical_device;
   vk::Device device;
   vk::Queue graphics_queue;
+  vk::Queue transfer_queue;
   vk::SurfaceKHR surface;
-  vk::CommandPool pool;
+  vk::CommandPool graphics_pool;
+  vk::CommandPool transfer_pool;
   uint32_t graphics_queue_index;
+  uint32_t transfer_queue_index;
 
   static VulkanCore create(const AppInfo);
 };
@@ -65,12 +68,26 @@ struct Cosentinii
   VulkanCore state;
   VulkanSwapchain swapchain;
   VulkanFrame frame;
-  Buffer buffer{};
+  Buffer vertex_buffer{};
+  Buffer staging_buffer{};
   uint32_t index = 0;
 
   static Cosentinii create(const AppInfo);
   shader::ShaderSet create_shaders(std::initializer_list<shader::ShaderInfo>);
   bool recreate_swapchain();
   void draw_frame(shader::ShaderSet);
-  void create_vertex_buffer(const std::vector<shader::Vertex>&);
+  void create_vertex_buffer(std::span<const shader::Vertex>);
+  void create_staging_buffer(uint32_t);
+
+private:
+  std::optional<uint32_t>
+  find_memory_type(uint32_t a_type_filter,
+                   vk::MemoryPropertyFlags a_properties);
+
+  std::pair<vk::Buffer, vk::DeviceMemory>
+  create_buffer(vk::DeviceSize a_size, vk::BufferUsageFlags a_usage,
+                vk::MemoryPropertyFlags a_properties);
+
+  void copy_buffer(vk::Buffer a_src_buffer, vk::Buffer a_dst_buffer,
+                   vk::DeviceSize a_size);
 };

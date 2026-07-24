@@ -33,7 +33,7 @@ auto create_instance(const std::string&, std::span<const char* const>)
 auto create_physical_device(const vk::Instance, std::span<const char* const>)
     -> vk::PhysicalDevice;
 
-auto create_device(const vk::PhysicalDevice, const vk::SurfaceKHR,
+auto create_device(const vk::PhysicalDevice, std::span<const uint32_t>,
                    std::span<const char* const>) -> vk::Device;
 
 auto create_queue(const vk::Device, uint32_t) -> vk::Queue;
@@ -46,18 +46,15 @@ auto create_command_buffers(const vk::Device, const vk::CommandPool, uint32_t)
 auto queue_index(const vk::PhysicalDevice, const vk::QueueFlagBits,
                  std::function<bool(uint32_t)>) -> uint32_t;
 
-auto get_capabilities(const vk::PhysicalDevice a_physical_device,
-                      const vk::SurfaceKHR a_surface,
-                      std::pair<uint32_t, uint32_t> a_size)
+auto get_capabilities(const vk::PhysicalDevice, const vk::SurfaceKHR,
+                      std::pair<uint32_t, uint32_t>)
     -> std::optional<Capabilities>;
 
-auto get_surface_format(const vk::PhysicalDevice a_physical_device,
-                        const vk::SurfaceKHR a_surface)
+auto get_surface_format(const vk::PhysicalDevice, const vk::SurfaceKHR)
     -> std::optional<vk::SurfaceFormatKHR>;
 
-auto create_swapchain(const Capabilities& a_capabilities,
-                      const vk::SurfaceFormatKHR a_format,
-                      const vk::Device a_device, const vk::SurfaceKHR a_surface,
+auto create_swapchain(const Capabilities&, const vk::SurfaceFormatKHR,
+                      const vk::Device, const vk::SurfaceKHR,
                       const std::optional<vk::SwapchainKHR> = std::nullopt)
     -> vk::SwapchainKHR;
 
@@ -67,5 +64,5 @@ auto create_swapchain_views(const vk::Device, const std::vector<vk::Image>&,
                             const vk::Format)
     -> std::optional<std::vector<vk::ImageView>>;
 
-auto read_shader(const std::string& a_file_name) -> std::vector<char>;
+auto read_shader(const std::string&) -> std::vector<char>;
 } // namespace primitives

@@ -32,6 +32,8 @@ extern "C" auto SDL_AppInit(void** a_app_state, int, char**) -> SDL_AppResult
       AppInfo{&app_state.window, "Vulkan :3", extensions, device_extensions};
   auto engine = Cosentinii::create(std::move(state));
 
+  auto size = sizeof(shader::vertices[0]) * shader::vertices.size();
+  engine.create_staging_buffer(size);
   engine.create_vertex_buffer(shader::vertices);
 
   auto triangle_shader_src = primitives::read_shader("shaders/slang.spv");

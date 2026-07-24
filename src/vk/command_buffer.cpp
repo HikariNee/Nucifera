@@ -140,7 +140,7 @@ auto command_buffer::clear_image(Cosentinii& a_state,
   a_buffer.setScissorWithCount(
       vk::Rect2D(vk::Offset2D(0, 0), a_state.swapchain.extent));
 
-  a_buffer.bindVertexBuffers(0, a_state.buffer.buffer, {0});
+  a_buffer.bindVertexBuffers(0, a_state.vertex_buffer.buffer, {0});
   a_buffer.draw(static_cast<uint32_t>(shader::vertices.size()), 1, 0, 0);
 
   a_buffer.endRendering();

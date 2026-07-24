@@ -19,20 +19,37 @@ auto VulkanCore::create(const AppInfo a_info) -> VulkanCore
       primitives::create_physical_device(instance, a_info.device_extensions);
 
   auto surface = a_info.window->surface(instance);
-  auto device = primitives::create_device(physical_device, surface,
-                                          a_info.device_extensions);
 
-  auto graphics_queue_index =
-      primitives::queue_index(physical_device, vk::QueueFlagBits::eGraphics,
+  auto graphics_queue_index = primitives::queue_index(
+      physical_device, vk::QueueFlagBits::eGraphics,
+      [physical_device, surface](uint32_t queue)
+      { return physical_device.getSurfaceSupportKHR(queue, surface).value; });
+
+  auto transfer_queue_index =
+      primitives::queue_index(physical_device, vk::QueueFlagBits::eTransfer,
                               [](uint32_t) { return true; });
 
+  auto device = primitives::create_device(
+      physical_device, std::vector{graphics_queue_index, transfer_queue_index},
+      a_info.device_extensions);
+
+  auto transfer_queue = primitives::create_queue(device, transfer_queue_index);
   auto graphics_queue = primitives::create_queue(device, graphics_queue_index);
 
   auto pool = primitives::create_command_pool(device, graphics_queue_index);
-
-  return VulkanCore{
-      a_info.window, instance, physical_device,     device, graphics_queue,
-      surface,       pool,     graphics_queue_index};
+  auto transfer_pool =
+      primitives::create_command_pool(device, transfer_queue_index);
+  return VulkanCore{a_info.window,
+                    instance,
+                    physical_device,
+                    device,
+                    graphics_queue,
+                    transfer_queue,
+                    surface,
+                    pool,
+                    transfer_pool,
+                    graphics_queue_index,
+                    transfer_queue_index};
 }
 
 auto VulkanSwapchain::create(const VulkanCore& a_state) -> VulkanSwapchain
@@ -71,7 +88,7 @@ auto VulkanFrame::create(const VulkanCore& a_state,
                          const VulkanSwapchain& a_swapchain) -> VulkanFrame
 {
   auto buffers = primitives::create_command_buffers(
-      a_state.device, a_state.pool, FRAMES_IN_FLIGHT);
+      a_state.device, a_state.graphics_pool, FRAMES_IN_FLIGHT);
 
   std::vector<vk::Semaphore> render_semaphores;
   render_semaphores.reserve(a_swapchain.image.size());
@@ -147,10 +164,10 @@ auto Cosentinii::draw_frame(shader::ShaderSet a_shaders) -> void
     std::abort();
   }
 
-  [[maybe_unused]] const auto reset_fences_result = device.resetFences(fence);
+  const auto _ = device.resetFences(fence);
 
   // I hate these [[maybe_unused]] but what can I do smh.
-  [[maybe_unused]] const auto reset_result = buffer.reset();
+  const auto _ = buffer.reset();
 
   // Clear the image
   command_buffer::clear_image(*this, buffer, image_index, std::move(a_shaders));
@@ -169,7 +186,7 @@ auto Cosentinii::draw_frame(shader::ShaderSet a_shaders) -> void
       .pSignalSemaphores = &this->frame.render_semaphore[image_index]};
 
   // Submit
-  [[maybe_unused]] const auto submit_result = queue.submit(submit_info, fence);
+  const auto _ = queue.submit(submit_info, fence);
 
   // Prepare to show
   const vk::PresentInfoKHR present_info_khr{
@@ -180,8 +197,7 @@ auto Cosentinii::draw_frame(shader::ShaderSet a_shaders) -> void
       .pImageIndices = &image_index};
 
   // show
-  [[maybe_unused]] const auto present_result =
-      queue.presentKHR(present_info_khr);
+  const auto present_result = queue.presentKHR(present_info_khr);
 
   // Just recreate the swapchain and move on, we already have an image.
   if ((present_result == vk::Result::eSuboptimalKHR) ||
@@ -251,12 +267,38 @@ auto Cosentinii::recreate_swapchain() -> bool
   return true;
 }
 
-auto find_memory_type(const vk::PhysicalDevice a_physical_device,
-                      uint32_t a_type_filter,
-                      vk::MemoryPropertyFlags a_properties)
+auto Cosentinii::copy_buffer(vk::Buffer a_src_buffer, vk::Buffer a_dst_buffer,
+                             vk::DeviceSize a_size) -> void
+{
+  vk::CommandBufferAllocateInfo alloc_info{
+      .commandPool = this->state.transfer_pool,
+      .level = vk::CommandBufferLevel::ePrimary,
+      .commandBufferCount = 1};
+
+  auto bufs =
+      EXPECT_ABORT(this->state.device.allocateCommandBuffers(alloc_info));
+  auto copy_buf = std::move(bufs.front());
+
+  auto _ =
+      copy_buf.begin({.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+
+  copy_buf.copyBuffer(a_src_buffer, a_dst_buffer, vk::BufferCopy(0, 0, a_size));
+
+  auto _ = copy_buf.end();
+
+  const vk::SubmitInfo submit_info{.commandBufferCount = 1,
+                                   .pCommandBuffers = &copy_buf};
+
+  // Submit
+  auto _ = this->state.transfer_queue.submit(submit_info, nullptr);
+  auto _ = this->state.transfer_queue.waitIdle();
+}
+
+auto Cosentinii::find_memory_type(uint32_t a_type_filter,
+                                  vk::MemoryPropertyFlags a_properties)
     -> std::optional<uint32_t>
 {
-  auto mem_props = a_physical_device.getMemoryProperties();
+  auto mem_props = this->state.physical_device.getMemoryProperties();
 
   for (const auto x : std::views::iota(0u, mem_props.memoryTypeCount))
   {
@@ -270,35 +312,63 @@ auto find_memory_type(const vk::PhysicalDevice a_physical_device,
   return std::nullopt;
 }
 
-auto Cosentinii::create_vertex_buffer(
-    const std::vector<shader::Vertex>& a_vertices) -> void
+auto Cosentinii::create_buffer(vk::DeviceSize a_size,
+                               vk::BufferUsageFlags a_usage,
+                               vk::MemoryPropertyFlags a_properties)
+    -> std::pair<vk::Buffer, vk::DeviceMemory>
 {
   auto device = this->state.device;
 
   vk::BufferCreateInfo buffer_info{
-      .size = sizeof(a_vertices[0]) * a_vertices.size(),
-      .usage = vk::BufferUsageFlagBits::eVertexBuffer,
-      .sharingMode = vk::SharingMode::eExclusive};
+      .size = a_size,
+      .usage = a_usage,
+      .sharingMode = vk::SharingMode::eExclusive,
+  };
 
   auto buffer = EXPECT_ABORT(device.createBuffer(buffer_info));
-
-  auto mem_requirements = device.getBufferMemoryRequirements(buffer);
+  auto mem_req = device.getBufferMemoryRequirements(buffer);
 
   vk::MemoryAllocateInfo memory_info{
-      .allocationSize = mem_requirements.size,
-      .memoryTypeIndex = EXPECT_ABORT(find_memory_type(
-          this->state.physical_device, mem_requirements.memoryTypeBits,
-          vk::MemoryPropertyFlagBits::eHostVisible |
-              vk::MemoryPropertyFlagBits::eHostCoherent))};
+      .allocationSize = mem_req.size,
+      .memoryTypeIndex = EXPECT_ABORT(
+          this->find_memory_type(mem_req.memoryTypeBits, a_properties))};
 
   auto memory = EXPECT_ABORT(device.allocateMemory(memory_info));
+  auto _ = device.bindBufferMemory(buffer, memory, 0);
 
-  auto mem = device.bindBufferMemory(buffer, memory, 0);
+  return std::make_pair(buffer, memory);
+}
+
+auto Cosentinii::create_staging_buffer(uint32_t size) -> void
+{
+  auto [buffer, memory] =
+      this->create_buffer(size, vk::BufferUsageFlagBits::eTransferSrc,
+                          vk::MemoryPropertyFlagBits::eHostVisible |
+                              vk::MemoryPropertyFlagBits::eHostCoherent);
+
+  this->staging_buffer.buffer = std::move(buffer);
+  this->staging_buffer.memory = std::move(memory);
+}
+
+auto Cosentinii::create_vertex_buffer(
+    std::span<const shader::Vertex> a_vertices) -> void
+{
+  auto device = this->state.device;
+  auto size = sizeof(a_vertices[0]) * a_vertices.size();
+
   void* data;
-  auto _ = device.mapMemory(memory, 0, buffer_info.size, {}, &data);
-  std::memcpy(data, a_vertices.data(), buffer_info.size);
-  device.unmapMemory(memory);
+  auto _ = device.mapMemory(this->staging_buffer.memory, 0, size, {}, &data);
+  std::memcpy(data, a_vertices.data(), size);
+  device.unmapMemory(this->staging_buffer.memory);
 
-  this->buffer.buffer = std::move(buffer);
-  this->buffer.memory = std::move(memory);
+  auto [buffer, memory] =
+      this->create_buffer(size,
+                          vk::BufferUsageFlagBits::eTransferDst |
+                              vk::BufferUsageFlagBits::eVertexBuffer,
+                          vk::MemoryPropertyFlagBits::eHostVisible |
+                              vk::MemoryPropertyFlagBits::eHostCoherent);
+
+  this->copy_buffer(this->staging_buffer.buffer, buffer, size);
+  this->vertex_buffer.buffer = std::move(buffer);
+  this->vertex_buffer.memory = std::move(memory);
 }

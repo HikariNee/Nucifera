@@ -181,24 +181,23 @@ auto primitives::queue_index(const vk::PhysicalDevice a_physical_device,
 }
 
 auto primitives::create_device(const vk::PhysicalDevice a_physical_device,
-                               const vk::SurfaceKHR a_surface,
+                               std::span<const uint32_t> a_indices,
                                std::span<const char* const> a_extensions)
     -> vk::Device
 {
-  auto graphics_queue_index = queue_index(
-      a_physical_device, vk::QueueFlagBits::eGraphics,
-      [&a_physical_device, &a_surface](uint32_t queue)
-      {
-        return a_physical_device.getSurfaceSupportKHR(queue, a_surface).value;
-      });
-
   float queue_priority = 0.5f;
+  std::vector<vk::DeviceQueueCreateInfo> queue_infos(a_indices.size());
 
-  vk::DeviceQueueCreateInfo device_queue_create_info{
-      .queueFamilyIndex = graphics_queue_index,
-      .queueCount = 1,
-      .pQueuePriorities = &queue_priority,
-  };
+  unsigned i = 0;
+  for (auto& info : queue_infos)
+  {
+    vk::DeviceQueueCreateInfo info_v{.queueFamilyIndex = a_indices[i],
+                                     .queueCount = 1,
+                                     .pQueuePriorities = &queue_priority};
+
+    info = std::move(info_v);
+    i++;
+  }
 
   vk::StructureChain<vk::PhysicalDeviceFeatures2,
                      vk::PhysicalDeviceVulkan11Features,
@@ -215,8 +214,8 @@ auto primitives::create_device(const vk::PhysicalDevice a_physical_device,
 
   vk::DeviceCreateInfo device_create_info{
       .pNext = &feature_chain.get<vk::PhysicalDeviceFeatures2>(),
-      .queueCreateInfoCount = 1,
-      .pQueueCreateInfos = &device_queue_create_info,
+      .queueCreateInfoCount = static_cast<uint32_t>(queue_infos.size()),
+      .pQueueCreateInfos = queue_infos.data(),
       .enabledExtensionCount = static_cast<uint32_t>(a_extensions.size()),
       .ppEnabledExtensionNames = a_extensions.data(),
   };
