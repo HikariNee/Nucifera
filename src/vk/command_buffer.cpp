@@ -141,7 +141,10 @@ auto command_buffer::clear_image(Cosentinii& a_state,
       vk::Rect2D(vk::Offset2D(0, 0), a_state.swapchain.extent));
 
   a_buffer.bindVertexBuffers(0, a_state.vertex_buffer.buffer, {0});
-  a_buffer.draw(static_cast<uint32_t>(shader::vertices.size()), 1, 0, 0);
+  a_buffer.bindIndexBuffer(a_state.index_buffer.buffer, 0,
+                           vk::IndexType::eUint16);
+  a_buffer.drawIndexed(static_cast<uint32_t>(shader::indices.size()), 1, 0, 0,
+                       0);
 
   a_buffer.endRendering();
   // END RENDERING

@@ -34,6 +34,7 @@ extern "C" auto SDL_AppInit(void** a_app_state, int, char**) -> SDL_AppResult
 
   auto size = sizeof(shader::vertices[0]) * shader::vertices.size();
   engine.create_staging_buffer(size);
+  engine.create_index_buffer(shader::indices);
   engine.create_vertex_buffer(shader::vertices);
 
   auto triangle_shader_src = primitives::read_shader("shaders/slang.spv");

@@ -69,7 +69,9 @@ struct Cosentinii
   VulkanSwapchain swapchain;
   VulkanFrame frame;
   Buffer vertex_buffer{};
-  Buffer staging_buffer{};
+  Buffer vertex_staging_buffer{};
+  Buffer index_staging_buffer{};
+  Buffer index_buffer{};
   uint32_t index = 0;
 
   static Cosentinii create(const AppInfo);
@@ -78,6 +80,7 @@ struct Cosentinii
   void draw_frame(shader::ShaderSet);
   void create_vertex_buffer(std::span<const shader::Vertex>);
   void create_staging_buffer(uint32_t);
+  void create_index_buffer(std::span<const uint16_t>);
 
 private:
   std::optional<uint32_t>

@@ -346,8 +346,40 @@ auto Cosentinii::create_staging_buffer(uint32_t size) -> void
                           vk::MemoryPropertyFlagBits::eHostVisible |
                               vk::MemoryPropertyFlagBits::eHostCoherent);
 
-  this->staging_buffer.buffer = std::move(buffer);
-  this->staging_buffer.memory = std::move(memory);
+  this->vertex_staging_buffer.buffer = std::move(buffer);
+  this->vertex_staging_buffer.memory = std::move(memory);
+}
+
+auto Cosentinii::create_index_buffer(std::span<const uint16_t> a_indices)
+    -> void
+{
+  auto device = this->state.device;
+  auto size = sizeof(a_indices[0]) * a_indices.size();
+
+  auto [buffer, memory] =
+      this->create_buffer(size, vk::BufferUsageFlagBits::eTransferSrc,
+                          vk::MemoryPropertyFlagBits::eHostVisible |
+                              vk::MemoryPropertyFlagBits::eHostCoherent);
+
+  this->index_staging_buffer.buffer = std::move(buffer);
+  this->index_staging_buffer.memory = std::move(memory);
+
+  void* data;
+  auto _ =
+      device.mapMemory(this->index_staging_buffer.memory, 0, size, {}, &data);
+  std::memcpy(data, a_indices.data(), size);
+  device.unmapMemory(this->index_staging_buffer.memory);
+
+  auto [index_buffer, index_memory] =
+      this->create_buffer(size,
+                          vk::BufferUsageFlagBits::eTransferDst |
+                              vk::BufferUsageFlagBits::eIndexBuffer,
+                          vk::MemoryPropertyFlagBits::eHostVisible |
+                              vk::MemoryPropertyFlagBits::eHostCoherent);
+
+  this->copy_buffer(this->index_staging_buffer.buffer, index_buffer, size);
+  this->index_buffer.buffer = std::move(index_buffer);
+  this->index_buffer.memory = std::move(index_memory);
 }
 
 auto Cosentinii::create_vertex_buffer(
@@ -357,9 +389,10 @@ auto Cosentinii::create_vertex_buffer(
   auto size = sizeof(a_vertices[0]) * a_vertices.size();
 
   void* data;
-  auto _ = device.mapMemory(this->staging_buffer.memory, 0, size, {}, &data);
+  auto _ =
+      device.mapMemory(this->vertex_staging_buffer.memory, 0, size, {}, &data);
   std::memcpy(data, a_vertices.data(), size);
-  device.unmapMemory(this->staging_buffer.memory);
+  device.unmapMemory(this->vertex_staging_buffer.memory);
 
   auto [buffer, memory] =
       this->create_buffer(size,
@@ -368,7 +401,7 @@ auto Cosentinii::create_vertex_buffer(
                           vk::MemoryPropertyFlagBits::eHostVisible |
                               vk::MemoryPropertyFlagBits::eHostCoherent);
 
-  this->copy_buffer(this->staging_buffer.buffer, buffer, size);
+  this->copy_buffer(this->vertex_staging_buffer.buffer, buffer, size);
   this->vertex_buffer.buffer = std::move(buffer);
   this->vertex_buffer.memory = std::move(memory);
 }
